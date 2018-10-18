@@ -1,0 +1,29 @@
+From 8822d1d767ef7b2a9f45b62b85860fdfdc6150f7 Mon Sep 17 00:00:00 2001
+From: James Callahan <james@konghq.com>
+Date: Tue, 11 Sep 2018 10:38:27 -0700
+Subject: [PATCH 6/9] enable ffi api
+
+Signed-off-by: Aapo Talvensaari <aapo.talvensaari@gmail.com>
+---
+ ngx_stream_lua-0.0.5/src/ngx_stream_lua_common.h | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/ngx_stream_lua-0.0.5/src/ngx_stream_lua_common.h b/ngx_stream_lua-0.0.5/src/ngx_stream_lua_common.h
+index 16faadc..8a9954f 100644
+--- a/ngx_stream_lua-0.0.5/src/ngx_stream_lua_common.h
++++ b/ngx_stream_lua-0.0.5/src/ngx_stream_lua_common.h
+@@ -9,11 +9,6 @@
+ #define _NGX_STREAM_LUA_COMMON_H_INCLUDED_
+
+
+-#ifndef NGX_LUA_NO_FFI_API
+-#define NGX_LUA_NO_FFI_API
+-#endif
+-
+-
+ #include <nginx.h>
+ #include <ngx_core.h>
+ #include <ngx_stream.h>
+--
+2.19.1
+
