@@ -3,7 +3,7 @@ Author: Roman Arutyunyan <arut@nginx.com>
 Date:   Mon Mar 12 16:03:08 2018 +0300
 
     Stream ssl_preread: $ssl_preread_alpn_protocols variable.
-
+    
     The variable keeps a comma-separated list of protocol names from ALPN TLS
     extension defined by RFC 7301.
 
@@ -36,13 +36,13 @@ index e3d11fd9..1d543005 100644
 @@ -85,6 +89,9 @@ static ngx_stream_variable_t  ngx_stream_ssl_preread_vars[] = {
      { ngx_string("ssl_preread_server_name"), NULL,
        ngx_stream_ssl_preread_server_name_variable, 0, 0, 0 },
-
+ 
 +    { ngx_string("ssl_preread_alpn_protocols"), NULL,
 +      ngx_stream_ssl_preread_alpn_protocols_variable, 0, 0, 0 },
 +
        ngx_stream_null_variable
  };
-
+ 
 @@ -139,12 +146,14 @@ ngx_stream_ssl_preread_handler(ngx_stream_session_t *s)
          if (p[0] != 0x16) {
              ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
@@ -50,17 +50,17 @@ index e3d11fd9..1d543005 100644
 +            ngx_stream_set_ctx(s, NULL, ngx_stream_ssl_preread_module);
              return NGX_DECLINED;
          }
-
+ 
          if (p[1] != 3) {
              ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
                             "ssl preread: unsupported SSL version");
 +            ngx_stream_set_ctx(s, NULL, ngx_stream_ssl_preread_module);
              return NGX_DECLINED;
          }
-
+ 
 @@ -158,6 +167,12 @@ ngx_stream_ssl_preread_handler(ngx_stream_session_t *s)
          p += 5;
-
+ 
          rc = ngx_stream_ssl_preread_parse_record(ctx, p, p + len);
 +
 +        if (rc == NGX_DECLINED) {
@@ -69,7 +69,7 @@ index e3d11fd9..1d543005 100644
 +        }
 +
          if (rc != NGX_AGAIN) {
-             return rc == NGX_OK ? NGX_DECLINED : rc;
+             return rc;
          }
 @@ -175,7 +190,7 @@ static ngx_int_t
  ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
@@ -78,7 +78,7 @@ index e3d11fd9..1d543005 100644
 -    size_t   left, n, size;
 +    size_t   left, n, size, ext;
      u_char  *dst, *p;
-
+ 
      enum {
 @@ -192,7 +207,10 @@ ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
          sw_ext_header,      /* extension_type, extension_data length */
@@ -90,7 +90,7 @@ index e3d11fd9..1d543005 100644
 +        sw_alpn_proto_len,  /* ALPN protocol_name length */
 +        sw_alpn_proto_data  /* ALPN protocol_name */
      } state;
-
+ 
      ngx_log_debug2(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
 @@ -201,6 +219,7 @@ ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
      state = ctx->state;
@@ -99,10 +99,10 @@ index e3d11fd9..1d543005 100644
 +    ext = ctx->ext;
      dst = ctx->dst;
      p = ctx->buf;
-
+ 
 @@ -299,10 +318,18 @@ ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
              break;
-
+ 
          case sw_ext_header:
 -            if (p[0] == 0 && p[1] == 0) {
 +            if (p[0] == 0 && p[1] == 0 && ctx->host.data == NULL) {
@@ -123,7 +123,7 @@ index e3d11fd9..1d543005 100644
              }
 @@ -313,6 +340,7 @@ ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
              break;
-
+ 
          case sw_sni_len:
 +            ext = (p[0] << 8) + p[1];
              state = sw_sni_host_head;
@@ -132,10 +132,10 @@ index e3d11fd9..1d543005 100644
 @@ -325,14 +353,21 @@ ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
                  return NGX_DECLINED;
              }
-
+ 
 -            state = sw_sni_host;
              size = (p[1] << 8) + p[2];
-
+ 
 +            if (ext < 3 + size) {
 +                ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
 +                               "ssl preread: SNI format error");
@@ -147,13 +147,13 @@ index e3d11fd9..1d543005 100644
              if (ctx->host.data == NULL) {
                  return NGX_ERROR;
              }
-
+ 
 +            state = sw_sni_host;
              dst = ctx->host.data;
              break;
-
+ 
 @@ -341,7 +376,64 @@ ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
-
+ 
              ngx_log_debug1(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
                             "ssl preread: SNI hostname \"%V\"", &ctx->host);
 -            return NGX_OK;
@@ -216,7 +216,7 @@ index e3d11fd9..1d543005 100644
 +            size = 0;
 +            break;
          }
-
+ 
          if (left < size) {
 @@ -354,6 +446,7 @@ ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
      ctx->state = state;
@@ -224,12 +224,12 @@ index e3d11fd9..1d543005 100644
      ctx->left = left;
 +    ctx->ext = ext;
      ctx->dst = dst;
-
+ 
      return NGX_AGAIN;
 @@ -383,6 +476,29 @@ ngx_stream_ssl_preread_server_name_variable(ngx_stream_session_t *s,
  }
-
-
+ 
+ 
 +static ngx_int_t
 +ngx_stream_ssl_preread_alpn_protocols_variable(ngx_stream_session_t *s,
 +    ngx_variable_value_t *v, uintptr_t data)
@@ -269,7 +269,7 @@ index 1d543005..62d6524d 100644
 +++ b/nginx-1.13.6/src/stream/ngx_stream_ssl_preread_module.c
 @@ -437,9 +437,9 @@ ngx_stream_ssl_preread_parse_record(ngx_stream_ssl_preread_ctx_t *ctx,
          }
-
+ 
          if (left < size) {
 -           ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
 -                          "ssl preread: failed to parse handshake");
@@ -279,3 +279,4 @@ index 1d543005..62d6524d 100644
 +            return NGX_DECLINED;
          }
      }
+ 
