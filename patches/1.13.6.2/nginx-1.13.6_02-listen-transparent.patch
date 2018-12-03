@@ -236,27 +236,14 @@ diff -ru a/nginx-1.13.6/auto/os/linux b/nginx-1.13.6/auto/os/linux
 diff -ru a/nginx-1.13.6/src/os/unix/ngx_linux_config.h b/nginx-1.13.6/src/os/unix/ngx_linux_config.h
 --- a/nginx-1.13.6/src/os/unix/ngx_linux_config.h	2018-10-31 12:26:52.689485871 -0300
 +++ b/nginx-1.13.6/src/os/unix/ngx_linux_config.h	2018-10-31 12:26:55.439485758 -0300
-@@ -42,7 +42,6 @@
+@@ -42,7 +42,10 @@
  #include <sched.h>
  
++#if (NGX_HAVE_IPV6_TRANSPARENT)
++#include <linux/in6.h>          /* Must be included before netinet/in.h */
++#endif
  #include <sys/socket.h>
--#include <netinet/in.h>
+ #include <netinet/in.h>
  #include <netinet/tcp.h>        /* TCP_NODELAY, TCP_CORK */
  #include <arpa/inet.h>
  #include <netdb.h>
-@@ -61,6 +60,14 @@
- #include <ngx_auto_config.h>
- 
- 
-+#if (NGX_HAVE_IPV6_TRANSPARENT)
-+#include <linux/in6.h>
-+#endif
-+
-+
-+#include <netinet/in.h>
-+
-+
- #if (NGX_HAVE_POSIX_SEM)
- #include <semaphore.h>
- #endif
-
